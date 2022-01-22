@@ -103,7 +103,7 @@ services:
           source: ./docker/extra_settings
           target: /app/docker/extra_settings
   mysql:
-    image: mysql:5.7.37@sha256:66480693e01295d85954bb5dbe2f41f29ebceb57d3d8098ea0c9d201473f2d8b
+    image: mysql:8.0.28@sha256:d0507b008897c39f6cbc76285af1171d4551988475e00e91344060023cd9c553
     environment:
       MYSQL_RANDOM_ROOT_PASSWORD: 'yes'
       DD_DATABASE_URL: "${DD_DATABASE_URL:-mysql://defectdojo:defectdojo@mysql:3306/defectdojo}"
