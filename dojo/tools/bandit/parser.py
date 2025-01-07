@@ -1,10 +1,11 @@
 import json
+
 import dateutil.parser
 
 from dojo.models import Finding
 
 
-class BanditParser(object):
+class BanditParser:
     def get_scan_types(self):
         return ["Bandit Scan"]
 
@@ -17,12 +18,11 @@ class BanditParser(object):
     def get_findings(self, filename, test):
         data = json.load(filename)
 
-        results = list()
+        results = []
         if "generated_at" in data:
             find_date = dateutil.parser.parse(data["generated_at"])
 
         for item in data["results"]:
-
             findingdetail = "\n".join(
                 [
                     "**Test Name:** `" + item["test_name"] + "`",
@@ -34,7 +34,7 @@ class BanditParser(object):
                     "```",
                     str(item.get("code")).replace("```", "\\`\\`\\`"),
                     "```",
-                ]
+                ],
             )
 
             finding = Finding(
@@ -47,7 +47,9 @@ class BanditParser(object):
                 date=find_date,
                 static_finding=True,
                 dynamic_finding=False,
-                vuln_id_from_tool=":".join([item["test_name"], item["test_id"]]),
+                vuln_id_from_tool=":".join(
+                    [item["test_name"], item["test_id"]],
+                ),
                 nb_occurences=1,
             )
             # manage confidence
@@ -62,11 +64,10 @@ class BanditParser(object):
         return results
 
     def convert_confidence(self, value):
-        if "high" == value.lower():
+        if value.lower() == "high":
             return 2
-        elif "medium" == value.lower():
+        if value.lower() == "medium":
             return 3
-        elif "low" == value.lower():
+        if value.lower() == "low":
             return 6
-        else:
-            return None
+        return None

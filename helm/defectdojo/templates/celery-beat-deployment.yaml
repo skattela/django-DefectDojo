@@ -5,26 +5,38 @@ metadata:
   name: {{ $fullName }}-celery-beat
   labels:
     defectdojo.org/component: celery
+    defectdojo.org/subcomponent: beat
     app.kubernetes.io/name: {{ include "defectdojo.name" . }}
     app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/managed-by: {{ .Release.Service }}
     helm.sh/chart: {{ include "defectdojo.chart" . }}
+    {{- with .Values.extraLabels }}
+        {{- toYaml . | nindent 4 }}
+    {{- end }}
 spec:
   replicas: {{ .Values.celery.beat.replicas }}
+  {{- if .Values.revisionHistoryLimit }}
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
+  {{- end }}
   selector:
     matchLabels:
       defectdojo.org/component: celery
+      defectdojo.org/subcomponent: beat
       app.kubernetes.io/name: {{ include "defectdojo.name" . }}
       app.kubernetes.io/instance: {{ .Release.Name }}
   template:
     metadata:
       labels:
         defectdojo.org/component: celery
+        defectdojo.org/subcomponent: beat
         app.kubernetes.io/name: {{ include "defectdojo.name" . }}
         app.kubernetes.io/instance: {{ .Release.Name }}
-        {{- if .Values.podLabels }}
-        {{- toYaml .Values.podLabels | nindent 8 }}
-        {{- end }}         
+        {{- with .Values.extraLabels }}
+          {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- with .Values.podLabels }}
+          {{- toYaml . | nindent 8 }}
+        {{- end }}
       annotations:
       {{- with .Values.celery.beat.annotations }}
         {{- toYaml . | nindent 8 }}
@@ -43,6 +55,11 @@ spec:
       volumes:
       - name: run
         emptyDir: {}
+      {{- if  .Values.django.uwsgi.certificates.enabled }}
+      - name: cert-mount
+        configMap:
+          name: {{ .Values.django.uwsgi.certificates.configName }}
+      {{- end }}
       {{- range .Values.celery.extraVolumes }}
       - name: userconfig-{{ .name }}
         {{ .type }}:
@@ -55,11 +72,14 @@ spec:
           path: {{ .hostPath }}
           {{- end }}
       {{- end }}
-      containers:
+      {{- if or .Values.dbMigrationChecker.enabled .Values.cloudsql.enabled }}
+      initContainers:
+      {{- end }}
       {{- if .Values.cloudsql.enabled  }}
       - name: cloudsql-proxy
         image: {{ .Values.cloudsql.image.repository }}:{{ .Values.cloudsql.image.tag }}
         imagePullPolicy: {{ .Values.cloudsql.image.pullPolicy }}
+        restartPolicy: Always
         securityContext:
           runAsNonRoot: true
         command: ["/cloud_sql_proxy"]
@@ -67,8 +87,6 @@ spec:
         - "-verbose={{ .Values.cloudsql.verbose }}"
         {{- if eq .Values.database "postgresql" }}
         - "-instances={{ .Values.cloudsql.instance }}=tcp:{{ .Values.postgresql.primary.service.ports.postgresql }}"
-        {{- else if eq .Values.database "mysql" }}
-        - "-instances={{ .Values.cloudsql.instance }}=tcp:{{ .Values.mysql.primary.service.ports.mysql }}"
         {{- end }}
         {{- if .Values.cloudsql.enable_iam_login }}
         - "-enable_iam_login"
@@ -77,6 +95,12 @@ spec:
         - "-ip_address_types=PRIVATE"
         {{- end }}
       {{- end }}
+      {{- if .Values.dbMigrationChecker.enabled }}
+      {{$data := dict "fullName" $fullName }}
+      {{- $newContext := merge . (dict "fullName" $fullName) }}
+      {{- include "dbMigrationChecker" $newContext | nindent 6 }}
+      {{- end }}
+      containers:
       - command:
         - /entrypoint-celery-beat.sh
         name: celery
@@ -89,6 +113,10 @@ spec:
         volumeMounts:
         - name: run
           mountPath: /run/defectdojo
+        {{- if  .Values.django.uwsgi.certificates.enabled }}
+        - name: cert-mount
+          mountPath: {{ .Values.django.uwsgi.certificates.certMountPath }}
+        {{- end }}  
         {{- range .Values.celery.extraVolumes }}
         - name: userconfig-{{ .name }}
           readOnly: true
@@ -105,10 +133,7 @@ spec:
         - name: DD_CELERY_BROKER_PASSWORD
           valueFrom:
             secretKeyRef:
-            {{- if eq .Values.celery.broker "rabbitmq" }}
-              name: {{ .Values.rabbitmq.auth.existingPasswordSecret | default "defectdojo-rabbitmq-specific" }}
-              key: {{ .Values.rabbitmq.auth.secretPasswordKey | default "rabbitmq-password" }}  
-            {{- else if eq .Values.celery.broker "redis" }}
+            {{- if eq .Values.celery.broker "redis" }}
               name: {{ .Values.redis.auth.existingSecret | default "defectdojo-redis-specific" }}
               key: {{ .Values.redis.auth.existingSecretPasswordKey | default "redis-password" }}
             {{- end }}
@@ -121,17 +146,14 @@ spec:
               {{- else if eq .Values.database "postgresqlha" }}
                 name: {{ .Values.postgresqlha.postgresql.existingSecret | default "defectdojo-postgresql-ha-specific" }}
                 key: postgresql-postgres-password
-              {{- else if eq .Values.database "mysql" }}
-                name: {{ .Values.mysql.auth.existingSecret | default "defectdojo-mysql-specific" }}
-                key: {{ .Values.mysql.auth.secretKey | default "mysql-password" }}
               {{- end }}
         - name: DD_SECRET_KEY
           valueFrom:
             secretKeyRef:
               name: {{ $fullName }}
               key: DD_SECRET_KEY
-        {{- if .Values.extraEnv }}
-        {{- toYaml .Values.extraEnv | nindent 8 }}
+        {{- with .Values.extraEnv }}
+          {{- toYaml . | nindent 8 }}
         {{- end }}
         resources:
           {{- toYaml .Values.celery.beat.resources | nindent 10 }}

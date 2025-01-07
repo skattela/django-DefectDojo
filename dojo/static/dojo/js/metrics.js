@@ -57,7 +57,8 @@ function homepage_pie_chart(critical, high, medium, low, info) {
 function homepage_severity_plot(critical, high, medium, low) {
     var options = {
         xaxes: [{
-            mode: 'time'
+            mode: 'time',
+            minTickSize: [1, "month"]
         }],
         yaxes: [{
             min: 0
@@ -103,11 +104,16 @@ function homepage_severity_plot(critical, high, medium, low) {
         dashboard-metrics.html
 */
 
+function getTicks(critical, high, medium, low) {
+    return [...new Set(critical.concat(high, medium, low).map(x => x[0]))]
+}
+
 function opened_per_month(critical, high, medium, low) {
     var options = {
         xaxes: [{
             mode: 'time',
-            timeformat: "%m/%y"
+            timeformat: "%m/%y",
+            ticks: getTicks(critical, high, medium, low),
         }],
         yaxes: [{
             min: 0
@@ -153,7 +159,8 @@ function accepted_per_month(critical, high, medium, low) {
     var options = {
         xaxes: [{
             mode: 'time',
-            timeformat: "%m/%y"
+            timeformat: "%m/%y",
+            ticks: getTicks(critical, high, medium, low),
         }],
         yaxes: [{
             min: 0
@@ -199,7 +206,8 @@ function opened_per_week(critical, high, medium, low) {
     var options = {
         xaxes: [{
             mode: 'time',
-            timeformat: "%m/%d/%Y"
+            timeformat: "%m/%d/%Y",
+            ticks: getTicks(critical, high, medium, low),
         }],
         yaxes: [{
             min: 0
@@ -245,7 +253,8 @@ function accepted_per_week(critical, high, medium, low) {
     var options = {
         xaxes: [{
             mode: 'time',
-            timeformat: "%m/%d/%Y"
+            timeformat: "%m/%d/%Y",
+            ticks: getTicks(critical, high, medium, low),
         }],
         yaxes: [{
             min: 0
@@ -732,6 +741,61 @@ function accepted_per_week_2(critical, high, medium, low) {
 /*
         product_metrics.html
 */
+
+function open_findings_burndown(critical, high, medium, low, info, y_max, y_min) {
+    var options = {
+        xaxes: [{
+            mode: "time",
+            timeformat: "%Y/%m/%d"
+        }],
+        yaxes: [{
+            max: y_max,
+            min: y_min
+        }],
+        series: {
+            lines: {
+                show: true
+            },
+            points: {
+                show: true,
+                radius: 1
+            }
+        },
+        grid: {
+            hoverable: true,
+            borderWidth: 1,
+            borderColor: '#e7e7e7',
+    
+        },
+        legend: {
+            position: 'nw'
+        },
+        tooltip: true,
+    };
+
+    var plotObj = $.plot($("#open_findings_burndown"), [{
+                data: critical,
+                label: " Critical",
+                color: "#d9534f",
+            }, {
+                data: high,
+                label: " High",
+                color: '#f0ad4e',
+            }, {
+                data: medium,
+                label: " Medium",
+                color: '#f0de28',
+            }, {
+                data: low,
+                label: " Low",
+                color: '#4cae4c',
+            }, {
+                data: info,
+                label: " Info",
+                color: '#337ab7',
+            }],
+            options);
+}
 
 function accepted_objs(d1, d2, d3, d4, d5, ticks) {
     var data = [
@@ -1563,8 +1627,6 @@ function open_close_weekly(opened, closed, accepted, ticks) {
     var options = {
         xaxes: [{
             ticks: ticks,
-            transform: function(v) { return -v; },
-            inverseTransform: function(v) { return -v; }
         }],
         yaxes: [{
             min: 0
@@ -1606,8 +1668,6 @@ function severity_weekly(critical, high, medium, low, info, ticks) {
     var options = {
         xaxes: [{
             ticks: ticks,
-            transform: function(v) { return -v; },
-            inverseTransform: function(v) { return -v; }
         }],
         yaxes: [{
             min: 0
@@ -1658,8 +1718,6 @@ function severity_counts_weekly(critical, high, medium, ticks) {
     var options = {
         xaxes: [{
             ticks: ticks,
-            transform: function(v) { return -v; },
-            inverseTransform: function(v) { return -v; }
         }],
         yaxes: [{
             min: 0

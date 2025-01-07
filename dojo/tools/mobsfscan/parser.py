@@ -1,13 +1,13 @@
-import json
 import hashlib
+import json
 import re
+
 from dojo.models import Finding
 
 
-class MobsfscanParser(object):
-    """
-    A class that can be used to parse the mobsfscan (https://github.com/MobSF/mobsfscan) JSON report file.
-    """
+class MobsfscanParser:
+
+    """A class that can be used to parse the mobsfscan (https://github.com/MobSF/mobsfscan) JSON report file."""
 
     SEVERITY = {
         "ERROR": "High",
@@ -26,25 +26,41 @@ class MobsfscanParser(object):
 
     def get_findings(self, filename, test):
         data = json.load(filename)
-        if len(data.get('results')) == 0:
+        if len(data.get("results")) == 0:
             return []
-        else:
-            dupes = {}
-            for key, item in data.get('results').items():
-                metadata = item.get('metadata')
-                cwe = int(re.match(r'CWE-([0-9]+)', metadata.get('cwe')).group(1))
-                masvs = metadata.get('masvs')
-                owasp_mobile = metadata.get('owasp-mobile')
-                description = "\n".join([
+        dupes = {}
+        for key, item in data.get("results").items():
+            metadata = item.get("metadata")
+            cwe = int(
+                re.match(r"(cwe|CWE)-([0-9]+)", metadata.get("cwe")).group(
+                    2,
+                ),
+            )
+            masvs = metadata.get("masvs")
+            owasp_mobile = metadata.get("owasp-mobile")
+            description = "\n".join(
+                [
                     f"**Description:** `{metadata.get('description')}`",
                     f"**OWASP MASVS:** `{masvs}`",
                     f"**OWASP Mobile:** `{owasp_mobile}`",
-                ])
-                references = metadata.get('reference')
-                if metadata.get('severity') in self.SEVERITY:
-                    severity = self.SEVERITY[metadata.get('severity')]
-                else:
-                    severity = "Info"
+                ],
+            )
+            references = metadata.get("reference")
+            severity = self.SEVERITY.get(metadata.get("severity"), "Info")
+
+            files = []
+
+            if item.get("files"):
+                for file in item.get("files"):
+                    file_path = file.get("file_path", "")
+                    line = file.get("match_lines", [0])[0]
+                    snippet = file.get("match_string", "")
+
+                    files.append((file_path, line, snippet))
+            else:
+                files.append(("", 0, ""))
+
+            for file_path, line, snippet in files:
 
                 finding = Finding(
                     title=f"{key}",
@@ -55,15 +71,14 @@ class MobsfscanParser(object):
                     description=description,
                     references=references,
                 )
-                if item.get('files'):
-                    for file in item.get('files'):
-                        file_path = file.get('file_path')
-                        line = file.get('match_lines')[0]
-                        finding.file_path = file_path
-                        finding.line = line
+
+                if file_path:
+                    finding.file_path = file_path
+                    finding.line = line
+                    finding.description = f"{description}\n**Snippet:** `{snippet}`"
 
                 dupe_key = hashlib.sha256(
-                    (key + str(cwe) + masvs + owasp_mobile).encode('utf-8')
+                    (key + str(cwe) + masvs + owasp_mobile + file_path).encode("utf-8"),
                 ).hexdigest()
 
                 if dupe_key in dupes:
@@ -71,4 +86,5 @@ class MobsfscanParser(object):
                     finding.nb_occurences += 1
                 else:
                     dupes[dupe_key] = finding
-            return list(dupes.values())
+
+        return list(dupes.values())

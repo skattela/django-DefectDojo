@@ -27,7 +27,7 @@
         <!-- jQuery -->
         <script src="{% static "jquery/dist/jquery.js" %}"></script>
         <!--  jQuery UI -->
-        <script src="{% static "components-jqueryui/jquery-ui.min.js" %}"></script>
+        <script src="{% static "jquery-ui/dist/jquery-ui.min.js" %}"></script>
         <!-- Bootstrap Core JavaScript -->
         <script src="{% static "bootstrap/dist/js/bootstrap.min.js" %}"></script>
         <!-- Bootstrap Select -->
@@ -80,8 +80,8 @@
 
         {% block add_css %}
         {% endblock %}
-        <link rel="stylesheet" href="{% static "components-jqueryui/themes/flick/jquery-ui.min.css" %}">
-        <link rel="shortcut icon" href="{% static "dojo/img/favicon.ico" %}"/>
+        <link rel="stylesheet" href="{% static "jquery-ui/dist/themes/flick/jquery-ui.min.css" %}">
+        <link rel="shortcut icon" type="image/png" href="{% static "dojo/img/favicon.png" %}"/>
         <link rel="stylesheet" href="{% static "chosen-bootstrap/chosen.bootstrap.min.css" %}">
         <link rel="stylesheet" href="{% static "fullcalendar/dist/fullcalendar.min.css" %}">
         {% block dojo_css %}
@@ -111,7 +111,9 @@
                         </button>
                         <a class="navbar-brand" href="{% url 'home' %}">
                         {% block header_logo %}
-                            <img src="{% static "dojo/img/logo.png" %}" alt="DefectDojo Logo" width="240"/>
+                            <div style="padding: 10px;">
+                                <img src="{% static "dojo/img/logo.png" %}" alt="DefectDojo Logo" width="240"/>
+                            </div>
                         {% endblock %}
                         </a>
 
@@ -170,12 +172,6 @@
                                           </li>
                                         {% endif %}
                                     {% endif %}
-                                    <li>
-                                        <a href="{% url 'api_v2_schema' %}" target="_blank">
-                                            <i class="fa-solid fa-book fa-fw" title="OpenAPI v2 Docs"></i>
-                                            {% trans "API v2 OpenAPI2 Docs" %}
-                                        </a>
-                                    </li>
                                     <li>
                                         <a href="{% url 'swagger-ui_oa3' %}" target="_blank">
                                             <i class="fa-solid fa-book fa-fw" title="OpenAPI v3 Docs"></i>
@@ -319,7 +315,7 @@
                                                         {% trans "Risk Accepted Findings" %}
                                                     </a>
                                                 </li>
-                                                {% if "dojo.view_finding_template"|has_configuration_permission %}
+                                                {% if "Finding_View"|has_global_permission %}
                                                     <li>
                                                         <a href="{% url 'templates' %}">
                                                             {% trans "Finding Templates" %}
@@ -378,6 +374,7 @@
                                                 {% endif %}
                                             </ul>
                                         </li>
+                                        {% block reports_tab %}
                                         <li>
                                             <a href="{% url 'report_builder' %}" aria-expanded="false" aria-label="Reports">
                                                 <i class="fa-solid fa-file-lines fa-fw"></i>
@@ -386,6 +383,7 @@
                                             </a>
                                             <!-- /.nav-second-level -->
                                         </li>
+                                        {% endblock %}
                                         <li>
                                             <a href="{% url 'metrics' %}?date=5&view=dashboard" aria-expanded="false" aria-label="Metrics">
                                                 <i class="fa-solid fa-chart-column fa-fw"></i>
@@ -414,6 +412,11 @@
                                                     </a>
                                                 </li>
                                                 <li>
+                                                    <a href="{% url 'product_tag_counts' %}">
+                                                        {% trans "Product Tag Counts" %}
+                                                    </a>
+                                                </li>
+                                                <li>
                                                     <a href="{% url 'simple_metrics' %}">
                                                         {% trans "Simple Metrics" %}
                                                     </a>
@@ -426,7 +429,7 @@
                                             </ul>
                                             <!-- /.nav-second-level -->
                                         </li>
-                                        {% if "auth.view_user"|has_configuration_permission or "auth.view_group"|has_configuration_permission %}
+                                        {% if "auth.view_user"|has_configuration_permission:request or "auth.view_group"|has_configuration_permission:request %}
                                             <li>
                                                 <a href="{% url 'users' %}" aria-disabled="true" aria-expanded="false" aria-label="Users" id="id_user_menu">
                                                     <i class="fa-solid fa-user fa-fw"></i>
@@ -434,14 +437,14 @@
                                                     <span class="glyphicon arrow"></span>
                                                 </a>
                                                 <ul class="nav nav-second-level">
-                                                    {% if "auth.view_user"|has_configuration_permission %}
+                                                    {% if "auth.view_user"|has_configuration_permission:request %}
                                                         <li>    
                                                             <a href="{% url 'users' %}">
                                                                 {% trans "Users" %}
                                                             </a>
                                                         </li>
                                                     {% endif %}
-                                                    {% if "auth.view_group"|has_configuration_permission %}
+                                                    {% if "auth.view_group"|has_configuration_permission:request %}
                                                         <li>
                                                             <a href="{% url 'groups' %}"  id="id_group_menu">
                                                                 {% trans "Groups" %}
@@ -460,7 +463,7 @@
                                         </li>
                                         {% endif %}
                                         {% if system_settings.enable_questionnaires %}
-                                            {% if "dojo.view_engagement_survey"|has_configuration_permission or "dojo.view_question"|has_configuration_permission %}
+                                            {% if "dojo.view_engagement_survey"|has_configuration_permission:request or "dojo.view_question"|has_configuration_permission:request %}
                                                 <li>
                                                     <a href="#">
                                                         <i class="fa-solid fa-house-medical-flag fa-fw"></i>
@@ -468,14 +471,14 @@
                                                         <span class="glyphicon arrow"></span>
                                                     </a>
                                                     <ul class="nav nav-second-level">
-                                                        {% if "dojo.view_engagement_survey"|has_configuration_permission  %}
+                                                        {% if "dojo.view_engagement_survey"|has_configuration_permission:request  %}
                                                             <li>
                                                                 <a href="{% url 'questionnaire' %}">
                                                                     {% trans "All Questionnaires" %}
                                                                 </a>
                                                             </li>
                                                         {% endif %}
-                                                        {% if "dojo.view_question"|has_configuration_permission %}
+                                                        {% if "dojo.view_question"|has_configuration_permission:request %}
                                                             <li>
                                                                 <a href="{% url 'questions' %}">
                                                                     {% trans "All Questions" %}
@@ -492,43 +495,43 @@
                                                 <i class="fa-solid fa-gear fa-fw"></i>
                                                 <span>{% trans "Configuration" %}</span>
                                             </a>
-                                            <ul class="nav nav-second-level">
-                                                {% if system_settings.enable_credentials and "dojo.view_cred_user"|has_configuration_permission %}
+                                            <ul class="nav nav-second-level nav-up">
+                                                {% if "dojo.change_announcement"|has_configuration_permission:request %}
+                                                    <li>
+                                                        <a href="{% url 'configure_announcement' %}">
+                                                            {% trans "Announcement" %}
+                                                        </a>
+                                                    </li>
+                                                {% endif %}
+                                                {% if system_settings.enable_credentials and "dojo.view_cred_user"|has_configuration_permission:request %}
                                                     <li>
                                                         <a href="{% url 'cred' %}">
                                                             {% trans "Credential Manager" %}
                                                         </a>
                                                     </li>
                                                 {% endif %}
-                                                {% if system_settings.enable_github  and "dojo.view_github_conf"|has_configuration_permission%}
+                                                {% if system_settings.enable_github  and "dojo.view_github_conf"|has_configuration_permission:request%}
                                                     <li>
                                                         <a href="{% url 'github' %}">
                                                             {% trans "GitHub" %}
                                                         </a>
                                                     </li>
                                                 {% endif %}
-                                                {% if system_settings.enable_google_sheets and "dojo.change_google_sheet"|has_configuration_permission %}
-                                                    <li>
-                                                        <a href="{% url 'configure_google_sheets' %}">
-                                                            {% trans "Google Sheets Sync" %}
-                                                        </a>
-                                                    </li>
-                                                {% endif %}
-                                                {% if system_settings.enable_jira and "dojo.view_jira_instance"|has_configuration_permission %}
+                                                {% if system_settings.enable_jira and "dojo.view_jira_instance"|has_configuration_permission:request %}
                                                     <li>
                                                         <a href="{% url 'jira' %}">
                                                             {% trans "JIRA" %}
                                                         </a>
                                                     </li>
                                                 {% endif %}
-                                                {% if "dojo.change_bannerconf"|has_configuration_permission %}
+                                                {% if "dojo.change_bannerconf"|has_configuration_permission:request %}
                                                     <li>
                                                         <a href="{% url 'configure_banner' %}">
-                                                            {% trans "Login banner" %}
+                                                            {% trans "Login Banner" %}
                                                         </a>
                                                     </li>
                                                 {% endif %}
-                                                {% if "dojo.view_note_type"|has_configuration_permission %}
+                                                {% if "dojo.view_note_type"|has_configuration_permission:request %}
                                                     <li>
                                                         <a href="{% url 'note_type' %}">
                                                             {% trans "Note Types" %}
@@ -540,19 +543,19 @@
                                                         {% trans "Notifications" %}
                                                     </a>
                                                 </li>
+                                                {% if system_settings.enable_webhooks_notifications and "dojo.view_notification_webhooks"|has_configuration_permission:request %}
+                                                <li>
+                                                    <a href="{% url 'notification_webhooks' %}">
+                                                        {% trans "Notification Webhooks" %}
+                                                    </a>
+                                                </li>
+                                                {% endif %}
                                                 <li>
                                                     <a href="{% url 'regulations' %}">
                                                         {% trans "Regulations" %}
                                                     </a>
                                                 </li>
-                                                {% if system_settings.enable_rules_framework and "dojo.view_rule"|has_configuration_permission %}
-                                                    <li>
-                                                        <a href="{% url 'rules' %}">
-                                                            {% trans "Rules Framework" %}
-                                                        </a>
-                                                    </li>
-                                                {% endif %}
-                                                {% if system_settings.enable_finding_sla and "dojo.view_sla_configuration"|has_configuration_permission %}
+                                                {% if system_settings.enable_finding_sla and "dojo.view_sla_configuration"|has_configuration_permission:request %}
                                                     <li>
                                                         <a href="{% url 'sla_config' %}">
                                                             {% trans "SLA Configuration" %}
@@ -566,14 +569,14 @@
                                                         </a>
                                                     </li>
                                                 {% endif %}
-                                                {% if "dojo.view_tool_configuration"|has_configuration_permission %}
+                                                {% if "dojo.view_tool_configuration"|has_configuration_permission:request %}
                                                     <li>
                                                         <a href="{% url 'tool_config' %}">
                                                             {% trans "Tool Configuration" %}
                                                         </a>
                                                     </li>
                                                 {% endif %}
-                                                {% if "dojo.view_tool_type"|has_configuration_permission %}
+                                                {% if "dojo.view_tool_type"|has_configuration_permission:request %}
                                                     <li>
                                                         <a href="{% url 'tool_type' %}">
                                                             {% trans "Tool Type" %}
@@ -583,7 +586,14 @@
                                             </ul>
                                         </li>
                                     {% endblock %}
-
+                                    {% block support-tab %}
+                                        <li>
+                                            <a href="{% url 'support' %}" aria-disabled="true" aria-expanded="false" aria-label="Support">
+                                                <i class="fa-solid fa-level-up fa-fw"></i>
+                                                <span>{% trans "Upgrade" %}</span>
+                                            </a>
+                                        </li>
+                                    {% endblock %}
                                     <li id="min-menu">
                                         <a href="#" id="minimize-menu" title="Expand/Collapse Menu" aria-label="Expand/Collapse Menu">
                                             <i id="nav-minimize-menu-li" class="fa-solid fa-circle-right fa-fw"></i>
@@ -600,6 +610,17 @@
             {% endblock %}
             <!-- Page Content -->
             <div id="page-wrapper">
+                {% if request.user.is_authenticated and announcement %}
+                    {% load announcement_banner_tags %}
+                    <div role="alert" class="announcement-banner alert alert-{{ announcement.style }} {% if announcement.dismissable %}alert-dismissible{% endif %} show">
+                    {% if announcement.dismissable %}
+                        <a href="{% url 'dismiss_announcement' %}" class="close" aria-label="Close">
+                            <span aria-hidden="true">×</span>
+                        </a>
+                    {% endif %}
+                    {{ announcement.message|bleach_announcement_message }}
+                    </div>
+                {% endif %}
                 <div class="container-fluid">
                     <!-- start of tabs -->
                     {% block tab_bar %}
@@ -755,10 +776,8 @@
                                             <a class="dropdown-toggle" data-toggle="dropdown" href="">
                                                 <span class="fa-solid fa-sitemap" aria-hidden="true"></span>
                                                 <span class="hidden-xs">
-                                                    {% trans "Endpoints" %}
-                                                    {% if product_tab.endpoints > 0 %}
-                                                        <span class="badge">{{ product_tab.endpoint_hosts }} / {{ product_tab.endpoints }}</span>
-                                                    {% endif %}
+                                                    {% trans "Hosts / Endpoints" %}
+                                                    <span class="badge">{{ product_tab.endpoint_hosts }} / {{ product_tab.endpoints }}</span>
                                                 </span>
                                                 <span class="caret"></span>
                                             </a>
@@ -1038,13 +1057,11 @@
                             License</a>. | <a href="https://github.com/DefectDojo/django-DefectDojo/blob/master/NOTICE"> Dependencies Notice.</a>
                                 </p>
                                 <p>
-                                    &copy; 2015-{% now "Y" %} DefectDojo, Inc. All rights reserved.
+                                    &copy; 2015-{% now "Y" %} DefectDojo, Inc. All rights reserved. DefectDojo is trademark of DefectDojo, Inc.
                                 </p>
                             </div>
                         </div>
                     </div>
-                    <p id="alert_refresh" class="hidden">{{ 'ALERT_REFRESH'|setting_enabled }}</p>
-                    <p id="disable_count" class="hidden">{{ 'DISABLE_ALERT_COUNTER'|setting_enabled }}</p>
                 </footer>
             {% endblock %}
             </div>
@@ -1057,78 +1074,75 @@
         <script src="{% static "dojo/js/index.js" %}"></script>
 
         <!-- our CVSS stuff -->
-        <script src="{% static "dojo/js/cvsscalc30_helptext.js" %}"></script>
-        <script src="{% static "dojo/js/cvsscalc30.js" %}"></script>
+        <script src="{% static "dojo/js/cvsscalc31_helptext.js" %}"></script>
+        <script src="{% static "dojo/js/cvsscalc31.js" %}"></script>
         <script src="{% static "dojo/js/cvss_calculator.js" %}"></script>
         <script type="application/javascript">
             $(document).ready(function() {
-                disable_count = document.getElementById('disable_count').innerHTML
-                refresh = document.getElementById('alert_refresh').innerHTML
+                $('.has-popover').hover(
+                    function() { $(this).popover('show'); }, // hover
+                    function() { $(this).popover('hide'); } // unhover
+                );
+                {% if request.user.is_authenticated and not 'DISABLE_ALERT_COUNTER'|setting_enabled %}
+                    function get_alerts() {
+                        $('.dropdown-alerts').html('<div class="text-center"><i class="fa-solid fa-spinner fa-spin"></i></div>');
+                        $.get("{% url 'alerts_json' %}?limit=12", function (data) {
+                            $('.dropdown-alerts').empty();
+                            $.each(data, function(i, elem) {
+                            var titleField = elem.fields.title ? elem.fields.title : elem.fields.description;
+                            var display_title = titleField.length < 50 ? titleField : titleField.trim().substring(0,50).trim(this) + '...';
+                            var description = elem.fields.description
+                            var display_description = description ? description.length < 100 ? description : description.trim().substring(0,100).trim(this) + '...': ''
+                            var dropdown_alert = "alert-list" + i;
+                            $('.dropdown-alerts').append('<li><div style="padding: 3px 20px;"><i class="fa-solid fa-' + htmlEscape(elem.fields.icon) +
+                                                            ' fa-fw"></i><a href="' + htmlEscape(elem.fields.url) + '" id=' + dropdown_alert +
+                                                            ' title="' + htmlEscape(display_description) + '"></a><span class="pull-right text-muted small">' +
+                                                        htmlEscape(elem.fields.source) + '</span></div></li><li class="divider"></li>');
+                            $("#" + dropdown_alert).text(display_title);
+                            });
 
-                $('.has-popover').popover({'trigger':'hover'});
-                {% if request.user.is_authenticated %}
+                            if (data.length > 0) {
+                                $('.dropdown-alerts').append('<li><a class="text-center" href="{% url "alerts" %}"><strong>{% trans "See All Alerts" %}</strong>' +
+                                                            '<i class="fa-solid fa-angle-right"></i></a></li>');
+                                $('.dropdown-alerts').append('<li><a class="text-center" href="{% url "delete_alerts" %}"><strong>{% trans "Clear All Alerts" %}</strong>' +
+                                                        '<i class="fa-solid fa-angle-right"></i></a></li>');
+                            }
+                            else {
+                                $('.dropdown-alerts').append('<li class="text-center"><strong>{% trans "No alerts found" %}</strong></li>');
+                            }
+                        });
+                        update_alertcount()
+                    }
+                    function update_alertcount() {
+                        $.get("{% url 'alertcount' %}", function (data) {
+                            if (data.count != $('#alert_count').text()) {
+                                $('#alert_count').text(data.count);
+                                $('#alert_count').removeClass().addClass('badge badge-count badge-count' + data.count);
+                            }
+                        });
+                    }
+
                     $('.dropdown-toggle-alerts').click(function() {
                         get_alerts();
                     });
 
-                    if (disable_count == "False") {
-                        if(refresh == 'True') {
-                            setInterval(function() {
-                                update_alertcount();
-                            }, 10000);
-                        } else {
-                            update_alertcount();
-                        }
-                    }
+                {% if 'ALERT_REFRESH'|setting_enabled %}
+                    setInterval(function() {
+                        update_alertcount();
+                    }, 10000);
+                {% else %}
+                    update_alertcount();
+                {% endif %}
                 {% endif %}
 
-                function update_alertcount() {
-                    $.get("{% url 'alertcount' %}", function (data) {
-                        if (data.count != $('#alert_count').text()) {
-                            $('#alert_count').text(data.count);
-                            $('#alert_count').removeClass().addClass('badge badge-count badge-count' + data.count);
-                        }
-                    });
-                }
-
                 function htmlEscape(str) {
-                return str
-                    .replace(/\n/g, " ")
-                    .replace(/&/g, '&amp;')
-                    .replace(/"/g, '&quot;')
-                    .replace(/'/g, '&#39;')
-                    .replace(/</g, '&lt;')
-                    .replace(/>/g, '&gt;');
-                }
-
-                function get_alerts() {
-                    $('.dropdown-alerts').html('<div class="text-center"><i class="fa-solid fa-spin fa-spinner"></i></div>');
-                    $.get("{% url 'alerts_json' %}?limit=12", function (data) {
-                        $('.dropdown-alerts').empty();
-                        $.each(data, function(i, elem) {
-                        var titleField = elem.fields.title ? elem.fields.title : elem.fields.description;
-                        var display_title = titleField.length < 50 ? titleField : titleField.trim().substring(0,50).trim(this) + '...';
-                        var description = elem.fields.description
-                        var display_description = description ? description.length < 100 ? description : description.trim().substring(0,100).trim(this) + '...': ''
-                        var dropdown_alert = "alert-list" + i;
-                        $('.dropdown-alerts').append('<li><div style="padding: 3px 20px;"><i class="fa-solid fa-' + htmlEscape(elem.fields.icon) +
-                                                        ' fa-fw"></i><a href="' + htmlEscape(elem.fields.url) + '" id=' + dropdown_alert +
-                                                        ' title="' + htmlEscape(display_description) + '"></a><span class="pull-right text-muted small">' +
-                                                    htmlEscape(elem.fields.source) + '</span></div></li><li class="divider"></li>');
-                        $("#" + dropdown_alert).text(display_title);
-                        });
-
-                        if (data.length > 0) {
-                            $('.dropdown-alerts').append('<li><a class="text-center" href="{% url "alerts" %}"><strong>{% trans "See All Alerts" %}</strong>' +
-                                                        '<i class="fa-solid fa-angle-right"></i></a></li>');
-                            $('.dropdown-alerts').append('<li><a class="text-center" href="{% url "delete_alerts" %}"><strong>{% trans "Clear All Alerts" %}</strong>' +
-                                                    '<i class="fa-solid fa-angle-right"></i></a></li>');
-                        }
-                        else {
-                            $('.dropdown-alerts').append('<li class="text-center"><strong>{% trans "No alerts found" %}</strong></li>');
-                        }
-                    });
-                    update_alertcount()
+                    return str
+                        .replace(/\n/g, " ")
+                        .replace(/&/g, '&amp;')
+                        .replace(/"/g, '&quot;')
+                        .replace(/'/g, '&#39;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;');
                 }
 
                 $("#id_jiraform-jira_issue").on('paste', function(e) {
