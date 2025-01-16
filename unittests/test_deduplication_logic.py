@@ -1,10 +1,13 @@
-from .dojo_test_case import DojoTestCase
-from dojo.models import Finding, User, Product, Endpoint, Endpoint_Status, Test, Engagement
-from dojo.models import System_Settings
-from django.conf import settings
-from crum import impersonate
-import unittest
 import logging
+import unittest
+
+from crum import impersonate
+from django.conf import settings
+
+from dojo.models import Endpoint, Endpoint_Status, Engagement, Finding, Product, System_Settings, Test, User
+
+from .dojo_test_case import DojoTestCase
+
 logger = logging.getLogger(__name__)
 deduplicationLogger = logging.getLogger("dojo.specific-loggers.deduplication")
 
@@ -24,11 +27,6 @@ deduplicationLogger = logging.getLogger("dojo.specific-loggers.deduplication")
 #     that mathces either the hash_code or unique id.
 #    -> that is an insteresting improvment to consider
 #   - If the unique_id does NOT match, the finding is still considered for dedupe if the hash_code matches. We may need to forbid as the unique_id should be leading for the same test_type
-
-# false positive history observations:
-# - doesn't respect dedupe_on_engagement
-# - if endpoints are mismatching, it falls back to comparing just the title + test_type or cwe + test_type. this leads to false positive false positives (pung intended)
-# - I think this feature should be resdesigned and use the dedupe algo to find "identical/similar findings" to copy false_p status from
 
 # test data summary
 # product 1: Python How-to
@@ -128,10 +126,10 @@ deduplicationLogger = logging.getLogger("dojo.specific-loggers.deduplication")
 
 
 class TestDuplicationLogic(DojoTestCase):
-    fixtures = ['dojo_testdata.json']
+    fixtures = ["dojo_testdata.json"]
 
     def run(self, result=None):
-        testuser = User.objects.get(username='admin')
+        testuser = User.objects.get(username="admin")
         testuser.usercontactinfo.block_execution = True
         testuser.save()
 
@@ -142,7 +140,7 @@ class TestDuplicationLogic(DojoTestCase):
             super().run(result)
 
     def setUp(self):
-        logger.debug('enabling deduplication')
+        logger.debug("enabling deduplication")
         self.enable_dedupe()
 
         self.log_summary()
@@ -190,7 +188,7 @@ class TestDuplicationLogic(DojoTestCase):
         # 24 is already a duplicate of 22, let's see what happens if we create an identical finding with different title (and reset status)
         # expect: NOT marked as duplicate as title is part of hash_code calculation
         finding_new, finding_4 = self.copy_and_reset_finding(id=4)
-        finding_new.title = 'the best title'
+        finding_new.title = "the best title"
         finding_new.save(dedupe_option=True)
 
         self.assert_finding(finding_new, not_pk=24, duplicate=False, not_hash_code=finding_4.hash_code)
@@ -199,7 +197,7 @@ class TestDuplicationLogic(DojoTestCase):
         # 24 is already a duplicate of 22, let's see what happens if we create an identical finding with different description (and reset status)
         # expect: not marked as duplicate as legacy sees description as leading for hash_code
         finding_new, finding_24 = self.copy_and_reset_finding(id=24)
-        finding_new.description = 'useless finding'
+        finding_new.description = "useless finding"
         finding_new.save(dedupe_option=True)
 
         self.assert_finding(finding_new, not_pk=24, duplicate=False, not_hash_code=finding_24.hash_code)
@@ -217,9 +215,9 @@ class TestDuplicationLogic(DojoTestCase):
         # 24 is already a duplicate of 22, let's see what happens if we create an identical finding with different file_path (and reset status)
         # expect: not marked as duplicate
         finding_new, finding_24 = self.copy_and_reset_finding(id=24)
-        finding_new.file_path = '/dev/null'
+        finding_new.file_path = "/dev/null"
 
-        finding_22 = Finding.objects.get(id=22)
+        Finding.objects.get(id=22)
 
         finding_new.save(dedupe_option=True)
 
@@ -232,7 +230,7 @@ class TestDuplicationLogic(DojoTestCase):
         # both test 3 and 4 are ZAP scans (cross scanner dedupe is still not working very well)
         finding_new, finding_22 = self.copy_and_reset_finding(id=22)
         # create new engagment + test in same product
-        test_new, eng_new = self.create_new_test_and_engagment_from_finding(finding_22)
+        test_new, _eng_new = self.create_new_test_and_engagment_from_finding(finding_22)
 
         finding_new.test = test_new
         finding_new.save(dedupe_option=True)
@@ -249,7 +247,7 @@ class TestDuplicationLogic(DojoTestCase):
         # dedupe_inside_engagment must be false before cloning engagement
         self.set_dedupe_inside_engagement(False)
         # create new engagment + test in same product
-        test_new, eng_new = self.create_new_test_and_engagment_from_finding(finding_22)
+        test_new, _eng_new = self.create_new_test_and_engagment_from_finding(finding_22)
 
         finding_new.test = test_new
         finding_new.save(dedupe_option=True)
@@ -258,7 +256,7 @@ class TestDuplicationLogic(DojoTestCase):
 
     # legacy: if file_path and line or both empty and there are no endpoints, no dedupe will happen. Is this desirable or a BUG?
     def test_identical_no_filepath_no_line_no_endpoints_legacy(self):
-        finding_new, finding_22 = self.copy_and_reset_finding(id=22)
+        finding_new, _finding_22 = self.copy_and_reset_finding(id=22)
         finding_new.file_path = None
         finding_new.line = None
         finding_new.save(dedupe_option=True)
@@ -355,7 +353,7 @@ class TestDuplicationLogic(DojoTestCase):
         self.assert_finding(finding_new2, not_pk=finding_new.pk, duplicate=True, duplicate_finding_id=finding_new.id, hash_code=finding_new.hash_code, not_hash_code=finding_24.hash_code)
 
     def test_identical_legacy_extra_endpoints_dynamic(self):
-        finding_new, finding_24 = self.copy_and_reset_finding_add_endpoints(id=24)
+        finding_new, _finding_24 = self.copy_and_reset_finding_add_endpoints(id=24)
         finding_new.save()
 
         # create an identical copy of the new finding, but with 1 extra endpoint.
@@ -383,7 +381,7 @@ class TestDuplicationLogic(DojoTestCase):
         # create a new finding with 3 endpoints (so 1 extra)
         # expect: not marked as duplicate as endpoints need to be 100% equal for dynamic findings (host+port)
         #         hash_code not affected by endpoints
-        finding_new, finding_24 = self.copy_and_reset_finding_add_endpoints(id=24)
+        finding_new, _finding_24 = self.copy_and_reset_finding_add_endpoints(id=24)
         finding_new.save()
 
         # create an identical copy of the new finding, but with 1 extra endpoint. should not be marked as duplicate
@@ -402,7 +400,7 @@ class TestDuplicationLogic(DojoTestCase):
         self.assert_finding(finding_new3, not_pk=finding_new.pk, duplicate=False, hash_code=finding_new.hash_code)
 
     def test_identical_legacy_no_endpoints_dynamic(self):
-        finding_new, finding_24 = self.copy_and_reset_finding_add_endpoints(id=24)
+        finding_new, _finding_24 = self.copy_and_reset_finding_add_endpoints(id=24)
         finding_new.save()
 
         # create an identical copy of the new finding, but with no endpoints
@@ -463,7 +461,7 @@ class TestDuplicationLogic(DojoTestCase):
         # 4 is already a duplicate of 2, let's see what happens if we create an identical finding with different title (and reset status)
         # expect: NOT marked as duplicate as title is part of hash_code calculation
         finding_new, finding_4 = self.copy_and_reset_finding(id=4)
-        finding_new.title = 'the best title'
+        finding_new.title = "the best title"
         finding_new.save(dedupe_option=True)
 
         self.assert_finding(finding_new, not_pk=4, duplicate=False, not_hash_code=finding_4.hash_code)
@@ -474,7 +472,7 @@ class TestDuplicationLogic(DojoTestCase):
         # expect: marked as duplicate
         finding_new, finding_4 = self.copy_and_reset_finding(id=4)
 
-        finding_new.description = 'useless finding'
+        finding_new.description = "useless finding"
         finding_new.save(dedupe_option=True)
 
         if (settings.DEDUPE_ALGO_ENDPOINT_FIELDS == []):
@@ -487,7 +485,7 @@ class TestDuplicationLogic(DojoTestCase):
         finding_new.save(dedupe_option=True)
         self.assert_finding(finding_new, not_pk=2, duplicate=True, duplicate_finding_id=finding_4.duplicate_finding.id, hash_code=finding_2.hash_code)
 
-    # TODO not usefile with ZAP?
+    # TODO: not usefile with ZAP?
     def test_identical_except_line_hash_code(self):
         # 4 is already a duplicate of 2, let's see what happens if we create an identical finding with different line (and reset status)
         # 2 has an endpoint ftp://localhost, 4 has no endpoint
@@ -507,12 +505,12 @@ class TestDuplicationLogic(DojoTestCase):
         finding_new.save(dedupe_option=True)
         self.assert_finding(finding_new, not_pk=2, duplicate=True, duplicate_finding_id=finding_4.duplicate_finding.id, hash_code=finding_2.hash_code)
 
-    # TODO not usefile with ZAP?
+    # TODO: not usefile with ZAP?
     def test_identical_except_filepath_hash_code(self):
         # 4 is already a duplicate of 2, let's see what happens if we create an identical finding with different file_path (and reset status)
         # expect: marked as duplicate
         finding_new, finding_4 = self.copy_and_reset_finding(id=4)
-        finding_new.file_path = '/dev/null'
+        finding_new.file_path = "/dev/null"
         finding_new.save(dedupe_option=True)
 
         if (settings.DEDUPE_ALGO_ENDPOINT_FIELDS == []):
@@ -522,7 +520,7 @@ class TestDuplicationLogic(DojoTestCase):
             self.assert_finding(finding_new, not_pk=4, duplicate=False, duplicate_finding_id=None, hash_code=finding_4.hash_code)
 
         finding_new, finding_2 = self.copy_with_endpoints_without_dedupe_and_reset_finding(id=2)
-        finding_new.file_path = '/dev/null'
+        finding_new.file_path = "/dev/null"
         finding_new.save(dedupe_option=True)
         self.assert_finding(finding_new, not_pk=2, duplicate=True, duplicate_finding_id=finding_4.duplicate_finding.id, hash_code=finding_2.hash_code)
 
@@ -693,7 +691,7 @@ class TestDuplicationLogic(DojoTestCase):
     def test_different_unique_id_unique_id(self):
         # create identical copy
         finding_new, finding_124 = self.copy_and_reset_finding(id=124)
-        finding_new.unique_id_from_tool = '9999'
+        finding_new.unique_id_from_tool = "9999"
         finding_new.save()
 
         # expect not duplicate, but same hash_code
@@ -710,10 +708,10 @@ class TestDuplicationLogic(DojoTestCase):
     def test_title_description_line_filepath_different_unique_id(self):
         # create identical copy, change some fields
         finding_new, finding_124 = self.copy_and_reset_finding(id=124)
-        finding_new.title = 'another title'
-        finding_new.unsaved_vulnerability_ids = ['CVE-2020-12345']
-        finding_new.cwe = '456'
-        finding_new.description = 'useless finding'
+        finding_new.title = "another title"
+        finding_new.unsaved_vulnerability_ids = ["CVE-2020-12345"]
+        finding_new.cwe = "456"
+        finding_new.description = "useless finding"
         finding_new.save()
 
         # expect duplicate as we only match on unique id, hash_code also different
@@ -722,11 +720,11 @@ class TestDuplicationLogic(DojoTestCase):
     def test_title_description_line_filepath_different_and_id_different_unique_id(self):
         # create identical copy, change some fields
         finding_new, finding_124 = self.copy_and_reset_finding(id=124)
-        finding_new.title = 'another title'
-        finding_new.unsaved_vulnerability_ids = ['CVE-2020-12345']
-        finding_new.cwe = '456'
-        finding_new.description = 'useless finding'
-        finding_new.unique_id_from_tool = '9999'
+        finding_new.title = "another title"
+        finding_new.unsaved_vulnerability_ids = ["CVE-2020-12345"]
+        finding_new.cwe = "456"
+        finding_new.description = "useless finding"
+        finding_new.unique_id_from_tool = "9999"
         finding_new.save()
 
         # expect not duplicate as we match on unique id, hash_code also different because fields changed
@@ -742,10 +740,10 @@ class TestDuplicationLogic(DojoTestCase):
         finding_22.test.test_type = finding_124.test.test_type
         finding_22.test.save()
 
-        finding_22.unique_id_from_tool = '888'
+        finding_22.unique_id_from_tool = "888"
         finding_22.save(dedupe_option=False)
 
-        finding_new.unique_id_from_tool = '888'
+        finding_new.unique_id_from_tool = "888"
         finding_new.save()
 
         # expect not duplicate as dedupe_inside_engagement is True
@@ -758,9 +756,6 @@ class TestDuplicationLogic(DojoTestCase):
         # first setup some finding with same unique_id in same engagement, but different test (same test_type)
         finding_new.test = Test.objects.get(id=66)
         finding_new.save()
-        # print(finding_new.pk)
-        # print(finding_new.hash_code)
-        # print(finding_new.duplicate)
 
         # expect duplicate as dedupe_inside_engagement is True and the other test is in the same engagement
         self.assert_finding(finding_new, not_pk=124, duplicate=True, duplicate_finding_id=124, hash_code=finding_124.hash_code)
@@ -776,10 +771,10 @@ class TestDuplicationLogic(DojoTestCase):
         finding_22.test.test_type = finding_124.test.test_type
         finding_22.test.save()
 
-        finding_22.unique_id_from_tool = '888'
+        finding_22.unique_id_from_tool = "888"
         finding_22.save(dedupe_option=False)
 
-        finding_new.unique_id_from_tool = '888'
+        finding_new.unique_id_from_tool = "888"
         finding_new.save()
 
         # expect duplicate as dedupe_inside_engagement is false
@@ -791,8 +786,8 @@ class TestDuplicationLogic(DojoTestCase):
 
         # first setup some finding from a different test_Type, but with the same unique_id_from_tool
         finding_22 = Finding.objects.get(id=22)
-        finding_22.unique_id_from_tool = '888'
-        finding_new.unique_id_from_tool = '888'
+        finding_22.unique_id_from_tool = "888"
+        finding_new.unique_id_from_tool = "888"
         # and we need to look in another engagement this time for finding_22
         self.set_dedupe_inside_engagement(False)
         finding_22.save(dedupe_option=False)
@@ -828,7 +823,7 @@ class TestDuplicationLogic(DojoTestCase):
     def test_identical_unique_id_or_hash_code_bug(self):
         # create identical copy
         finding_124 = Finding.objects.get(id=124)
-        finding_new, finding_224 = self.copy_and_reset_finding(id=224)
+        finding_new, _finding_224 = self.copy_and_reset_finding(id=224)
         finding_new.title = finding_124.title  # use title from 124 to get matching hashcode
         finding_new.save()
 
@@ -838,7 +833,7 @@ class TestDuplicationLogic(DojoTestCase):
     def test_different_unique_id_unique_id_or_hash_code(self):
         # create identical copy
         finding_new, finding_224 = self.copy_and_reset_finding(id=224)
-        finding_new.unique_id_from_tool = '9999'
+        finding_new.unique_id_from_tool = "9999"
         finding_new.save()
 
         # expect duplicate, uid mismatch, but same hash_code
@@ -846,8 +841,8 @@ class TestDuplicationLogic(DojoTestCase):
 
         # but if we change title and thus hash_code, it should no longer matchs
         finding_new, finding_224 = self.copy_and_reset_finding(id=224)
-        finding_new.unique_id_from_tool = '9999'
-        finding_new.title = 'no no no no no no'
+        finding_new.unique_id_from_tool = "9999"
+        finding_new.title = "no no no no no no"
         finding_new.save()
 
         # expect duplicate, uid mismatch, but same hash_code
@@ -864,10 +859,10 @@ class TestDuplicationLogic(DojoTestCase):
     def test_title_description_line_filepath_different_unique_id_or_hash_code(self):
         # create identical copy, change some fields
         finding_new, finding_224 = self.copy_and_reset_finding(id=224)
-        finding_new.title = 'another title'
-        finding_new.unsaved_vulnerability_ids = ['CVE-2020-12345']
-        finding_new.cwe = '456'
-        finding_new.description = 'useless finding'
+        finding_new.title = "another title"
+        finding_new.unsaved_vulnerability_ids = ["CVE-2020-12345"]
+        finding_new.cwe = "456"
+        finding_new.description = "useless finding"
         finding_new.save()
 
         # expect duplicate as we only match on unique id, hash_code also different
@@ -876,11 +871,11 @@ class TestDuplicationLogic(DojoTestCase):
     def test_title_description_line_filepath_different_and_id_different_unique_id_or_hash_code(self):
         # create identical copy, change some fields
         finding_new, finding_224 = self.copy_and_reset_finding(id=224)
-        finding_new.title = 'another title'
-        finding_new.unsaved_vulnerability_ids = ['CVE-2020-12345']
-        finding_new.cwe = '456'
-        finding_new.description = 'useless finding'
-        finding_new.unique_id_from_tool = '9999'
+        finding_new.title = "another title"
+        finding_new.unsaved_vulnerability_ids = ["CVE-2020-12345"]
+        finding_new.cwe = "456"
+        finding_new.description = "useless finding"
+        finding_new.unique_id_from_tool = "9999"
         finding_new.save()
 
         # expect not duplicate as we match on unique id, hash_code also different because fields changed
@@ -896,10 +891,10 @@ class TestDuplicationLogic(DojoTestCase):
         finding_22.test.test_type = finding_224.test.test_type
         finding_22.test.save()
 
-        finding_22.unique_id_from_tool = '888'
+        finding_22.unique_id_from_tool = "888"
         finding_22.save(dedupe_option=False)
 
-        finding_new.unique_id_from_tool = '888'
+        finding_new.unique_id_from_tool = "888"
         finding_new.save()
 
         # should become duplicate of finding 22 because of the uid match, but existing BUG makes it duplicate of 224 due to hashcode match
@@ -915,11 +910,11 @@ class TestDuplicationLogic(DojoTestCase):
 
         finding_22.test.test_type = finding_224.test.test_type
         finding_22.test.save()
-        finding_22.unique_id_from_tool = '333'
+        finding_22.unique_id_from_tool = "333"
         finding_22.save(dedupe_option=False)
 
         finding_new.hash_code = finding_22.hash_code  # sneaky copy of hash_code to be able to test this case icm with the bug in previous test case above
-        finding_new.unique_id_from_tool = '333'
+        finding_new.unique_id_from_tool = "333"
         finding_new.save()
 
         # expect not duplicate as dedupe_inside_engagement is True and 22 is in another engagement
@@ -949,11 +944,11 @@ class TestDuplicationLogic(DojoTestCase):
         finding_22.test.scan_type = finding_224.test.scan_type
         finding_22.test.save()
 
-        finding_22.unique_id_from_tool = '888'
+        finding_22.unique_id_from_tool = "888"
         finding_22.save(dedupe_option=False)
 
-        finding_new.unique_id_from_tool = '888'
-        finding_new.title = 'hack to work around bug that matches on hash_code first'  # arrange different hash_code
+        finding_new.unique_id_from_tool = "888"
+        finding_new.title = "hack to work around bug that matches on hash_code first"  # arrange different hash_code
         finding_new.save()
 
         # expect duplicate as dedupe_inside_engagement is false
@@ -965,12 +960,12 @@ class TestDuplicationLogic(DojoTestCase):
 
         # first setup some finding from a different test_Type, but with the same unique_id_from_tool
         finding_22 = Finding.objects.get(id=22)
-        finding_22.unique_id_from_tool = '888'
-        finding_new.unique_id_from_tool = '888'
+        finding_22.unique_id_from_tool = "888"
+        finding_new.unique_id_from_tool = "888"
         # and we need to look in another engagement this time for finding_22
         self.set_dedupe_inside_engagement(False)
         finding_22.save(dedupe_option=False)
-        finding_new.title = 'title to change hash_code'
+        finding_new.title = "title to change hash_code"
         finding_new.save()
 
         # expect not duplicate as the mathcing finding is from another test_type, hash_code is also different
@@ -981,8 +976,8 @@ class TestDuplicationLogic(DojoTestCase):
 
         # first setup some finding from a different test_Type, but with the same unique_id_from_tool
         finding_22 = Finding.objects.get(id=22)
-        finding_22.unique_id_from_tool = '888'
-        finding_new.unique_id_from_tool = '888'
+        finding_22.unique_id_from_tool = "888"
+        finding_new.unique_id_from_tool = "888"
         # and we need to look in another engagement this time for finding_22
         self.set_dedupe_inside_engagement(False)
         finding_22.save(dedupe_option=False)
@@ -1040,264 +1035,19 @@ class TestDuplicationLogic(DojoTestCase):
             self.assert_finding(finding_new, not_pk=224, duplicate=True, duplicate_finding_id=224, hash_code=finding_224.hash_code)
         else:
             self.assert_finding(finding_new, not_pk=224, duplicate=False, duplicate_finding_id=None, hash_code=finding_224.hash_code)
-    # sync false positive history tests
-
-    def test_false_positive_history_with_dedupe_no_endpoints_identical(self):
-        self.enable_false_positive_history()
-        finding_22 = Finding.objects.get(id=22)
-        finding_22.false_p = True
-        finding_22.save(dedupe_option=False)
-        # create a copy of 22
-        finding_new, finding_22 = self.copy_and_reset_finding(id=22)
-        finding_new.false_p = False
-        finding_new.save()
-
-        # dedupe is enabled, hash_code matches, so new finding marked as duplicate AND copies false positive True from original
-        # feature or BUG? finding already marked as duplicate, should it als be marked as false positive?
-        # should we do the same for out_of_scope? risk accepted?
-        # should this be part of the dedupe process? or seperate as in false_p history?
-        self.assert_finding(finding_new, not_pk=22, duplicate=True, duplicate_finding_id=finding_22.id, hash_code=finding_22.hash_code)
-        self.assertEqual(finding_new.false_p, True)
-
-    def test_false_positive_history_with_dedupe_no_endpoints_title_matches_but_not_hash_code(self):
-        self.enable_false_positive_history()
-        finding_22 = Finding.objects.get(id=22)
-        finding_22.false_p = True
-        finding_22.save(dedupe_option=False)
-
-        # create a copy of 22
-        finding_new, finding_22 = self.copy_and_reset_finding(id=22)
-        finding_new.cwe = 432
-        finding_new.false_p = False
-        finding_new.save()
-
-        # dedupe is enabled, hash_code doesn't matches, so new finding not marked as duplicate and also not recognized by false positive history
-        self.assert_finding(finding_new, not_pk=22, duplicate=False, not_hash_code=finding_22.hash_code)
-        self.assertEqual(finding_new.false_p, False)
-
-    def test_false_positive_history_with_dedupe_no_endpoints_cwe_matches_but_not_hash_code(self):
-        self.enable_false_positive_history()
-        finding_22 = Finding.objects.get(id=22)
-        finding_22.false_p = True
-        finding_22.save(dedupe_option=False)
-
-        # create a copy of 22
-        finding_new, finding_22 = self.copy_and_reset_finding(id=22)
-        finding_new.title = 'same same but different'
-        finding_new.false_p = False
-        finding_new.save()
-
-        # dedupe is enabled, hash_code doesn't matches, so new finding not marked as duplicate and also not recognized by false positive history
-        self.assert_finding(finding_new, not_pk=22, duplicate=False, not_hash_code=finding_22.hash_code)
-        self.assertEqual(finding_new.false_p, False)
-
-    def test_false_positive_history_without_dedupe_no_endpoints_identical(self):
-        self.enable_dedupe(enable=False)
-        self.enable_false_positive_history()
-        finding_22 = Finding.objects.get(id=22)
-        finding_22.false_p = True
-        finding_22.save(dedupe_option=False)
-
-        # create a copy of 22
-        finding_new, finding_22 = self.copy_and_reset_finding(id=22)
-        finding_new.false_p = False
-        finding_new.save()
-
-        # dedupe is disabled, hash_code matches, so marked as false positive
-        self.assert_finding(finding_new, not_pk=22, duplicate=False, hash_code=finding_22.hash_code)
-        self.assertEqual(finding_new.false_p, True)
-
-    def test_false_positive_history_without_dedupe_no_endpoints_title_matches_but_not_hash_code(self):
-        self.enable_dedupe(enable=False)
-        self.enable_false_positive_history()
-        finding_22 = Finding.objects.get(id=22)
-        finding_22.false_p = True
-
-        # create a copy of 22
-        finding_new, finding_22 = self.copy_and_reset_finding(id=22)
-        finding_new.cwe = 432
-        finding_new.false_p = False
-        finding_new.save()
-
-        # dedupe is disabled, hash_code doesn't matches, so not marked as false positive
-        self.assert_finding(finding_new, not_pk=22, duplicate=False, not_hash_code=finding_22.hash_code)
-        self.assertEqual(finding_new.false_p, False)
-
-    def test_false_positive_history_without_dedupe_no_endpoints_cwe_matches_but_not_hash_code(self):
-        self.enable_dedupe(enable=False)
-        self.enable_false_positive_history()
-        finding_22 = Finding.objects.get(id=22)
-        finding_22.false_p = True
-
-        # create a copy of 22
-        finding_new, finding_22 = self.copy_and_reset_finding(id=22)
-        finding_new.title = 'same same but different'
-        finding_new.false_p = False
-        finding_new.save()
-
-        # dedupe is enabled, hash_code doesn't matches, so new finding not marked as duplicate and also not recognized by false positive history
-        self.assert_finding(finding_new, not_pk=22, duplicate=False, not_hash_code=finding_22.hash_code)
-        self.assertEqual(finding_new.false_p, False)
-
-    #  false positive history with endpoints
-
-    def test_false_positive_history_with_dedupe_with_endpoints_identical(self):
-        self.enable_false_positive_history()
-        finding_22 = Finding.objects.get(id=22)
-        finding_22.false_p = True
-        ep1 = Endpoint(product=finding_22.test.engagement.product, finding=finding_22, host="myhostxxx.com", protocol="https")
-        ep1.save()
-        finding_22.endpoints.add(ep1)
-        finding_22.save(dedupe_option=False)
-        # create a copy of 22
-        finding_new, finding_22 = self.copy_and_reset_finding(id=22)
-        finding_new.false_p = False
-        finding_new.save(dedupe_option=False)
-        ep1 = Endpoint(product=finding_new.test.engagement.product, finding=finding_new, host="myhost.com", protocol="https")
-        ep1.save()
-        finding_new.endpoints.add(ep1)
-        finding_new.save(false_history=True)
-
-        # dedupe is enabled, hash_code mismatche due to endpoints, so new finding not marked as duplicate AND copies false positive True from original even with mismatching endpoints
-        # feature or BUG? false positive status is copied when dedupe says it's not a dupe and endpoints are mismatching
-        self.assert_finding(finding_new, not_pk=22, duplicate=False, hash_code=finding_22.hash_code)
-        self.assertEqual(finding_new.false_p, True)
-
-    def test_false_positive_history_with_dedupe_with_endpoints_title_matches_but_not_hash_code(self):
-        self.enable_false_positive_history()
-        finding_22 = Finding.objects.get(id=22)
-        finding_22.false_p = True
-        ep1 = Endpoint(product=finding_22.test.engagement.product, finding=finding_22, host="myhostxxx.com", protocol="https")
-        ep1.save()
-        finding_22.endpoints.add(ep1)
-        finding_22.save(dedupe_option=False)
-
-        # create a copy of 22
-        finding_new, finding_22 = self.copy_and_reset_finding(id=22)
-        finding_new.false_p = False
-        finding_new.save(dedupe_option=False)
-        ep1 = Endpoint(product=finding_new.test.engagement.product, finding=finding_new, host="myhost.com", protocol="https")
-        ep1.save()
-        finding_new.endpoints.add(ep1)
-        finding_new.cwe = 432
-        finding_new.save(false_history=True)
-
-        # dedupe is enabled, hash_code doesn't matches, so new finding not marked as duplicate but it IS recognized by false positive history because of the title matching
-        # feature or BUG? false positive status is copied when dedupe says it's not a dupe and endpoints are mismatching
-        self.assert_finding(finding_new, not_pk=22, duplicate=False, not_hash_code=finding_22.hash_code)
-        self.assertEqual(finding_new.false_p, True)
-
-    def test_false_positive_history_with_dedupe_with_endpoints_cwe_matches_but_not_hash_code(self):
-        self.enable_false_positive_history()
-        finding_22 = Finding.objects.get(id=22)
-        ep1 = Endpoint(product=finding_22.test.engagement.product, finding=finding_22, host="myhostxxx.com", protocol="https")
-        ep1.save()
-        finding_22.endpoints.add(ep1)
-        finding_22.false_p = True
-        finding_22.cwe = 123  # testdate has no CWE
-        finding_22.save(dedupe_option=False)
-
-        # create a copy of 22
-        finding_new, finding_22 = self.copy_and_reset_finding(id=22)
-        finding_new.save(dedupe_option=False)
-        ep1 = Endpoint(product=finding_new.test.engagement.product, finding=finding_new, host="myhost.com", protocol="https")
-        ep1.save()
-        finding_new.endpoints.add(ep1)
-        finding_new.title = 'same same but different'
-        finding_new.false_p = False
-        finding_new.save(false_history=True)
-
-        # dedupe is enabled, hash_code doesn't matches, so new finding not marked as duplicate but it IS recognized by false positive history because of the cwe matching
-        # feature or BUG? false positive status is copied when dedupe says it's not a dupe and endpoints are mismatching
-        self.assert_finding(finding_new, not_pk=22, duplicate=False, not_hash_code=finding_22.hash_code)
-        self.assertEqual(finding_new.false_p, True)
-
-    def test_false_positive_history_without_dedupe_with_endpoints_identical(self):
-        self.enable_dedupe(enable=False)
-        self.enable_false_positive_history()
-        finding_22 = Finding.objects.get(id=22)
-        ep1 = Endpoint(product=finding_22.test.engagement.product, finding=finding_22, host="myhostxxx.com", protocol="https")
-        ep1.save()
-        finding_22.endpoints.add(ep1)
-        finding_22.false_p = True
-        finding_22.save(dedupe_option=False)
-
-        # create a copy of 22
-        finding_new, finding_22 = self.copy_and_reset_finding(id=22)
-        finding_new.save(dedupe_option=False)
-        ep1 = Endpoint(product=finding_new.test.engagement.product, finding=finding_new, host="myhost.com", protocol="https")
-        ep1.save()
-        finding_new.endpoints.add(ep1)
-        finding_new.false_p = False
-        finding_new.save(false_history=True)
-
-        # dedupe is disabled, hash_code matches, so marked as false positive
-        self.assert_finding(finding_new, not_pk=22, duplicate=False, hash_code=finding_22.hash_code)
-        self.assertEqual(finding_new.false_p, True)
-
-    def test_false_positive_history_without_dedupe_with_endpoints_title_matches_but_not_hash_code(self):
-        self.enable_dedupe(enable=False)
-        self.enable_false_positive_history()
-        finding_22 = Finding.objects.get(id=22)
-        ep1 = Endpoint(product=finding_22.test.engagement.product, finding=finding_22, host="myhostxxx.com", protocol="https")
-        ep1.save()
-        finding_22.endpoints.add(ep1)
-        finding_22.false_p = True
-        finding_22.save(dedupe_option=False)
-
-        # create a copy of 22
-        finding_new, finding_22 = self.copy_and_reset_finding(id=22)
-        finding_new.save(dedupe_option=False)
-        ep1 = Endpoint(product=finding_new.test.engagement.product, finding=finding_new, host="myhost.com", protocol="https")
-        ep1.save()
-        finding_new.endpoints.add(ep1)
-        finding_new.cwe = 432
-        finding_new.false_p = False
-        finding_new.save(false_history=True)
-
-        # dedupe is disabled, hash_code doesn't matches, but it IS recognized by false positive history because of the title matching
-        # feature or BUG? false positive status is copied when dedupe says it's not a dupe and endpoints are mismatching
-        self.assert_finding(finding_new, not_pk=22, duplicate=False, not_hash_code=finding_22.hash_code)
-        self.assertEqual(finding_new.false_p, True)
-
-    def test_false_positive_history_without_dedupe_with_endpoints_cwe_matches_but_not_hash_code(self):
-        self.enable_dedupe(enable=False)
-        self.enable_false_positive_history()
-        finding_22 = Finding.objects.get(id=22)
-        ep1 = Endpoint(product=finding_22.test.engagement.product, finding=finding_22, host="myhostxxx.com", protocol="https")
-        ep1.save()
-        finding_22.endpoints.add(ep1)
-        finding_22.cwe = 123  # test data has now CWE here
-        finding_22.false_p = True
-        finding_22.save(dedupe_option=False)
-
-        # create a copy of 22
-        finding_new, finding_22 = self.copy_and_reset_finding(id=22)
-        finding_new.save(dedupe_option=False)
-        ep1 = Endpoint(product=finding_new.test.engagement.product, finding=finding_new, host="myhost.com", protocol="https")
-        ep1.save()
-        finding_new.endpoints.add(ep1)
-        finding_new.title = 'same same but different'
-        finding_new.false_p = False
-        finding_new.save(false_history=True)
-
-        # dedupe is disabled, hash_code doesn't matches, so new finding not marked as duplicate but it IS recognized by false positive history because of the cwe matching
-        # feature or BUG? false positive status is copied when dedupe says it's not a dupe and endpoints are mismatching
-        self.assert_finding(finding_new, not_pk=22, duplicate=False, not_hash_code=finding_22.hash_code)
-        self.assertEqual(finding_new.false_p, True)
 
     # # some extra tests
 
     # # hash_code currently is only created on finding creation and after that never changed. feature or BUG?
     def test_hash_code_onetime(self):
-        finding_new, finding_2 = self.copy_and_reset_finding(id=2)
+        finding_new, _finding_2 = self.copy_and_reset_finding(id=2)
         self.assertEqual(finding_new.hash_code, None)
 
         finding_new.save()
-        self.assertTrue(finding_new.hash_code)  # True -> not None
+        self.assertIsNotNone(finding_new.hash_code)
         hash_code_at_creation = finding_new.hash_code
 
-        finding_new.title = 'new_title'
+        finding_new.title = "new_title"
         finding_new.unsaved_vulnerability_ids = [999]
 
         # both title and cve affect hash_code for ZAP scans, but not here because hash_code was already calculated
@@ -1323,7 +1073,7 @@ class TestDuplicationLogic(DojoTestCase):
         # we copy a finding but change some important fields so it's no longer a duplicate
         # expect: not marked as duplicate with dedupe_option-False
         finding_new, finding_24 = self.copy_and_reset_finding(id=24)
-        finding_new.title = 'new_title'
+        finding_new.title = "new_title"
         finding_new.unsaved_vulnerability_ids = [999]
         finding_new.save(dedupe_option=True)
         self.assert_finding(finding_new, not_pk=24, duplicate=False, not_hash_code=None)
@@ -1349,29 +1099,29 @@ class TestDuplicationLogic(DojoTestCase):
         # it will fail if someone removes title casing and force them to think about the implications
         # ideally we will switch to case-in-sensitive hash_code computation.
         # this could be a relatively small impact change as saving findings (currently) doesn't recompute the hash_code
-        finding_new, finding_24 = self.copy_and_reset_finding(id=24)
-        finding_new.title = 'the quick brown fox jumps over the lazy dog'
+        finding_new, _finding_24 = self.copy_and_reset_finding(id=24)
+        finding_new.title = "the quick brown fox jumps over the lazy dog"
         finding_new.save(dedupe_option=True)
-        self.assertEqual(finding_new.title, 'The Quick Brown Fox Jumps Over the Lazy Dog')
+        self.assertEqual(finding_new.title, "The Quick Brown Fox Jumps Over the Lazy Dog")
 
     def test_hash_code_without_dedupe(self):
         # if dedupe is disabled, hash_code should still be calculated
         self.enable_dedupe(enable=False)
-        finding_new, finding_124 = self.copy_and_reset_finding(id=124)
+        finding_new, _finding_124 = self.copy_and_reset_finding(id=124)
         finding_new.save(dedupe_option=False)
 
         # save skips hash_code generation if dedupe_option==False
-        self.assertFalse(finding_new.hash_code)
+        self.assertIsNone(finding_new.hash_code)
 
         finding_new.save(dedupe_option=True)
 
-        self.assertTrue(finding_new.hash_code)
+        self.assertIsNotNone(finding_new.hash_code)
 
-        finding_new, finding_124 = self.copy_and_reset_finding(id=124)
+        finding_new, _finding_124 = self.copy_and_reset_finding(id=124)
         finding_new.save()
 
         # by default hash_code should be generated
-        self.assertTrue(finding_new.hash_code)
+        self.assertIsNotNone(finding_new.hash_code)
 
     # # utility methods
 
@@ -1379,7 +1129,7 @@ class TestDuplicationLogic(DojoTestCase):
         if isinstance(product, int):
             product = Product.objects.get(pk=product)
 
-        logger.debug('product %i: %s', product.id, product.name)
+        logger.debug("product %i: %s", product.id, product.name)
         for eng in product.engagement_set.all():
             self.log_engagement(eng)
             for test in eng.test_set.all():
@@ -1389,13 +1139,13 @@ class TestDuplicationLogic(DojoTestCase):
         if isinstance(eng, int):
             eng = Engagement.objects.get(pk=eng)
 
-        logger.debug('\t' + 'engagement %i: %s (dedupe_inside: %s)', eng.id, eng.name, eng.deduplication_on_engagement)
+        logger.debug("\t" + "engagement %i: %s (dedupe_inside: %s)", eng.id, eng.name, eng.deduplication_on_engagement)
 
     def log_test(self, test):
         if isinstance(test, int):
             test = Test.objects.get(pk=test)
 
-        logger.debug('\t\t' + 'test %i: %s (algo=%s, dynamic=%s)', test.id, test, test.deduplication_algorithm, test.test_type.dynamic_tool)
+        logger.debug("\t\t" + "test %i: %s (algo=%s, dynamic=%s)", test.id, test, test.deduplication_algorithm, test.test_type.dynamic_tool)
         self.log_findings(test.finding_set.all())
 
     def log_all_products(self):
@@ -1404,25 +1154,25 @@ class TestDuplicationLogic(DojoTestCase):
 
     def log_findings(self, findings):
         if not findings:
-            logger.debug('\t\t' + 'no findings')
+            logger.debug("\t\t" + "no findings")
         else:
-            logger.debug('\t\t' + 'findings:')
+            logger.debug("\t\t" + "findings:")
             for finding in findings:
-                logger.debug('\t\t\t{:4.4}'.format(str(finding.id)) + ': "' + '{:20.20}'.format(finding.title) + '": ' + '{:5.5}'.format(finding.severity) + ': act: ' + '{:5.5}'.format(str(finding.active)) +
-                        ': ver: ' + '{:5.5}'.format(str(finding.verified)) + ': mit: ' + '{:5.5}'.format(str(finding.is_mitigated)) +
-                        ': dup: ' + '{:5.5}'.format(str(finding.duplicate)) + ': dup_id: ' +
-                        ('{:4.4}'.format(str(finding.duplicate_finding.id)) if finding.duplicate_finding else 'None') + ': hash_code: ' + str(finding.hash_code) +
-                        ': eps: ' + str(finding.endpoints.count()) + ": notes: " + str([n.id for n in finding.notes.all()]) +
-                        ': uid: ' + '{:5.5}'.format(str(finding.unique_id_from_tool)) + (' fp' if finding.false_p else '')
+                logger.debug(f"\t\t\t{finding.id!s:4.4}" + ': "' + f"{finding.title:20.20}" + '": ' + f"{finding.severity:5.5}" + ": act: " + f"{finding.active!s:5.5}"
+                        + ": ver: " + f"{finding.verified!s:5.5}" + ": mit: " + f"{finding.is_mitigated!s:5.5}"
+                        + ": dup: " + f"{finding.duplicate!s:5.5}" + ": dup_id: "
+                        + (f"{finding.duplicate_finding.id!s:4.4}" if finding.duplicate_finding else "None") + ": hash_code: " + str(finding.hash_code)
+                        + ": eps: " + str(finding.endpoints.count()) + ": notes: " + str([n.id for n in finding.notes.all()])
+                        + ": uid: " + f"{finding.unique_id_from_tool!s:5.5}" + (" fp" if finding.false_p else ""),
                         )
 
-        logger.debug('\t\tendpoints')
+        logger.debug("\t\tendpoints")
         for ep in Endpoint.objects.all():
-            logger.debug('\t\t\t' + str(ep.id) + ': ' + str(ep))
+            logger.debug("\t\t\t" + str(ep.id) + ": " + str(ep))
 
-        logger.debug('\t\t' + 'endpoint statuses')
+        logger.debug("\t\t" + "endpoint statuses")
         for eps in Endpoint_Status.objects.all():
-            logger.debug('\t\t\t' + str(eps.id) + ': ' + str(eps))
+            logger.debug("\t\t\t" + str(eps.id) + ": " + str(eps))
 
     def log_summary(self, product=None, engagement=None, test=None):
         if product:
@@ -1498,11 +1248,11 @@ class TestDuplicationLogic(DojoTestCase):
 
         self.assertEqual(finding.duplicate, duplicate)
         if not duplicate:
-            self.assertFalse(finding.duplicate_finding)  # False -> None
+            self.assertIsNone(finding.duplicate_finding)
 
         if duplicate_finding_id:
-            logger.debug('asserting that finding %i is a duplicate of %i', finding.id if finding.id is not None else 'None', duplicate_finding_id if duplicate_finding_id is not None else 'None')
-            self.assertTrue(finding.duplicate_finding)  # True -> not None
+            logger.debug("asserting that finding %i is a duplicate of %i", finding.id if finding.id is not None else "None", duplicate_finding_id if duplicate_finding_id is not None else "None")
+            self.assertIsNotNone(finding.duplicate_finding)
             self.assertEqual(finding.duplicate_finding.id, duplicate_finding_id)
 
         if not_hash_code:
@@ -1510,14 +1260,14 @@ class TestDuplicationLogic(DojoTestCase):
 
     def set_dedupe_inside_engagement(self, deduplication_on_engagement):
         for eng in Engagement.objects.all():
-            logger.debug('setting deduplication_on_engagment to %s for %i', str(deduplication_on_engagement), eng.id)
+            logger.debug("setting deduplication_on_engagment to %s for %i", str(deduplication_on_engagement), eng.id)
             eng.deduplication_on_engagement = deduplication_on_engagement
             eng.save()
 
     def create_new_test_and_engagment_from_finding(self, finding):
-        eng_new, eng = self.copy_and_reset_engagement(id=finding.test.engagement.id)
+        eng_new, _eng = self.copy_and_reset_engagement(id=finding.test.engagement.id)
         eng_new.save()
-        test_new, test = self.copy_and_reset_test(id=finding.test.id)
+        test_new, _test = self.copy_and_reset_test(id=finding.test.id)
         test_new.engagement = eng_new
         test_new.save()
         return test_new, eng_new
@@ -1525,9 +1275,4 @@ class TestDuplicationLogic(DojoTestCase):
     def enable_dedupe(self, enable=True):
         system_settings = System_Settings.objects.get()
         system_settings.enable_deduplication = enable
-        system_settings.save()
-
-    def enable_false_positive_history(self, enable=True):
-        system_settings = System_Settings.objects.get()
-        system_settings.false_positive_history = enable
         system_settings.save()

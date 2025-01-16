@@ -1,5 +1,6 @@
-from rest_framework.response import Response
 from rest_framework.mixins import ListModelMixin, RetrieveModelMixin
+from rest_framework.response import Response
+
 from .prefetcher import _Prefetcher
 
 
@@ -8,7 +9,8 @@ class PrefetchListMixin(ListModelMixin):
         prefetch_params = request.GET.get("prefetch", "").split(",")
         prefetcher = _Prefetcher()
 
-        # Apply the same operations as the standard list method defined in the django rest framework
+        # Apply the same operations as the standard list method defined in the
+        # django rest framework
         queryset = self.filter_queryset(self.get_queryset())
         queryset = self.paginate_queryset(queryset)
 
